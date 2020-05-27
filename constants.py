@@ -7,6 +7,8 @@ TRAIN_Y_PATH = DATA_PATH + "train_y.csv"
 TEST_X_PATH = DATA_PATH + "test_x.csv"
 TEST_Y_PATH = DATA_PATH + "test_y.csv"
 
+NUM_CLASSES = 4
+
 SNAPSHOT_PATH = "./snapshots/"
 # BEST_SNAPSHOT_PATH = "./snapshots/Snap_a9674_i9383_14_05_2020_15_28"
 
