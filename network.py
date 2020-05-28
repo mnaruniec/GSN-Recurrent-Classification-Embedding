@@ -60,6 +60,7 @@ class ParticleTrainer:
     def __init__(
             self,
             embedding=False,
+            store_embeddings=False,
             optimizer_lambda=partial(optim.Adam, lr=DEFAULT_LR, weight_decay=DEFAULT_WEIGHT_DECAY, amsgrad=True),
             mb_size=DEFAULT_MB_SIZE,
             num_epochs=DEFAULT_NUM_EPOCHS,
@@ -85,6 +86,8 @@ class ParticleTrainer:
         self.optimizer = None
 
         self.embedding = embedding
+        self.store_embeddings = store_embeddings
+        self.embedding_history = []
         self.embedding_map = self.generate_embedding_map()
 
         self.train_dl, self.valid_dl, self.test_dl = get_dataloaders(embedding_map=self.embedding_map)
@@ -96,6 +99,10 @@ class ParticleTrainer:
         if not self.embedding:
             return None
         return torch.randperm(100).view([10, 10])
+
+    def save_embeddings(self):
+        if self.embedding and self.store_embeddings:
+            self.embedding_history.append(self.net.embedding.weight.cpu().detach().numpy())
 
     def init_net(self):
         self.net = ParticleNet(embedding=self.embedding, **self.net_kwargs)
@@ -173,6 +180,8 @@ class ParticleTrainer:
         best_epoch = 0
         best_epoch_loss = 10 ** 9
 
+        self.save_embeddings()
+
         try:
             for epoch in range(1, self.num_epochs + 1):
                 print(f'EPOCH {epoch}')
@@ -219,6 +228,8 @@ class ParticleTrainer:
                 if self.epoch_train_eval:
                     self.run_evaluation(train_dl, 'TRAIN')
 
+                self.save_embeddings()
+
         except Exception as e:
             print(f'Exception thrown: {repr(e)}')
         finally:
@@ -233,6 +244,8 @@ class ParticleTrainer:
             if best_state_dict and best_epoch != last_epoch:
                 print(f'Restoring snapshot from epoch {best_epoch} with valid loss: {best_epoch_loss:.4f}')
                 self.net.load_state_dict(best_state_dict)
+
+            self.save_embeddings()
 
             acc, loss = self.run_evaluation(self.test_dl, 'TEST')
 
