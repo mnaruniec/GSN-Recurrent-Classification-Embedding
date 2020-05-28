@@ -17,33 +17,47 @@ class PreprocessDataLoader(DataLoader):
 
 
 class RNNDataLoader(PreprocessDataLoader):
+    def __init__(self, *args, embedding=False, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.embedding = embedding
+
     def preprocess(self, x, lens, y):
         order, _ = zip(*sorted(enumerate(lens), key=lambda e: e[1], reverse=True))
         order = list(order)
 
-        new_x = x[order].float().to(DEVICE)
+        new_x = x[order].to(DEVICE)
+        new_x = new_x if self.embedding else new_x.float()
         new_lens = lens[order]
         packed = padding.pack_padded_sequence(new_x, new_lens, batch_first=True)
 
         return packed, y[order].to(DEVICE)
 
 
-def load_file(path: str, is_labels: bool, normalize=False) -> torch.Tensor:
+def load_file(path: str, is_labels: bool, normalize=False, embedding_map=None) -> torch.Tensor:
     with open(path, mode='r') as f:
         if is_labels:
             return torch.tensor([int(line) for line in f])
 
-        splits = torch.tensor([[
+        result = torch.tensor([[
                 [int(i) for i in col.split('-')]
                 for col in line.split(',')
             ]
             for line in f
         ])
 
-    if normalize:
-        splits = (splits.float() / 4.5) - 1.
+    if embedding_map is not None:
+        tmp = torch.empty(*(result.shape[:-1]), dtype=torch.long)
+        for i in range(tmp.shape[0]):
+            for j in range(tmp.shape[1]):
+                coord = result[i][j]
+                tmp[i, j] = embedding_map[coord[0], coord[1]]
 
-    return splits
+        result = tmp
+
+    elif normalize:
+        result = (result.float() / 4.5) - 1.
+
+    return result
 
 
 def get_dataloader(
@@ -53,9 +67,10 @@ def get_dataloader(
         drop_last=True,
         mb_size=DEFAULT_MB_SIZE,
         truncation_p=0.,
-        truncation_amount=DEFAULT_TRUNCATION_AMOUNT
+        truncation_amount=DEFAULT_TRUNCATION_AMOUNT,
+        embedding_map=None,
 ) -> RNNDataLoader:
-    xs = load_file(x_path, is_labels=False)
+    xs = load_file(x_path, is_labels=False, embedding_map=embedding_map)
     ys = load_file(y_path, is_labels=True)
 
     lens = torch.tensor(xs.shape[0] * [xs.shape[1]])
@@ -67,15 +82,20 @@ def get_dataloader(
                 lens[i] -= truncation_amount
 
     ds = TensorDataset(xs, lens, ys)
-    dl = RNNDataLoader(ds, batch_size=mb_size, shuffle=shuffle, drop_last=drop_last, pin_memory=True)
+    dl = RNNDataLoader(
+        ds, batch_size=mb_size, shuffle=shuffle, drop_last=drop_last, pin_memory=True,
+        embedding=embedding_map is not None,
+    )
     return dl
 
 
-def get_dataloaders(truncation_p=0.):
+def get_dataloaders(truncation_p=0., embedding_map=None):
     train_dl = get_dataloader(
-        TRAIN_X_PATH, TRAIN_Y_PATH, shuffle=True, drop_last=True, truncation_p=truncation_p
+        TRAIN_X_PATH, TRAIN_Y_PATH, shuffle=True, drop_last=True, truncation_p=truncation_p, embedding_map=embedding_map,
     )
-    test_dl = get_dataloader(TEST_X_PATH, TEST_Y_PATH, shuffle=False, drop_last=False, truncation_p=truncation_p)
+    test_dl = get_dataloader(
+        TEST_X_PATH, TEST_Y_PATH, shuffle=False, drop_last=False, truncation_p=truncation_p, embedding_map=embedding_map,
+    )
     valid_dl = test_dl
 
     return train_dl, valid_dl, test_dl

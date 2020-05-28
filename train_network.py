@@ -2,7 +2,7 @@ from network import ParticleTrainer
 
 
 def main():
-    trainer = ParticleTrainer()
+    trainer = ParticleTrainer(embedding=False)
     trainer.train()
 
 

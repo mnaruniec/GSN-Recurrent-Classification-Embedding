@@ -14,11 +14,14 @@ from input import get_dataloaders
 class ParticleNet(nn.Module):
     def __init__(
             self,
+            embedding=False,
             hidden_fc=DEFAULT_HIDDEN_FC,
             recurrent_layers=DEFAULT_RECURRENT_LAYERS,
             recurrent_features=DEFAULT_RECURRENT_FEATURES,
     ):
         super().__init__()
+
+        self.embedding = nn.Embedding(num_embeddings=100, embedding_dim=2) if embedding else None
 
         self.recurrent = nn.LSTM(
             2, hidden_size=recurrent_features, num_layers=recurrent_layers, batch_first=True,
@@ -40,17 +43,24 @@ class ParticleNet(nn.Module):
         )
 
     def forward(self, x):
+        if self.embedding:
+            x = self.embed_packed_sequence(x)
         out, (h, c) = self.recurrent(x)
         x = h[-1]
         x = self.linear(x)
         return x
 
+    def embed_packed_sequence(self, x: nn.utils.rnn.PackedSequence):
+        ten, lens = nn.utils.rnn.pad_packed_sequence(x)
+        ten = self.embedding(ten)
+        return nn.utils.rnn.pack_padded_sequence(ten, lens)
+
 
 class ParticleTrainer:
     def __init__(
             self,
-            embedding = False,
-            optimizer_lambda = partial(optim.Adam, lr=DEFAULT_LR, weight_decay=DEFAULT_WEIGHT_DECAY, amsgrad=True),
+            embedding=False,
+            optimizer_lambda=partial(optim.Adam, lr=DEFAULT_LR, weight_decay=DEFAULT_WEIGHT_DECAY, amsgrad=True),
             mb_size=DEFAULT_MB_SIZE,
             num_epochs=DEFAULT_NUM_EPOCHS,
             patience=DEFAULT_PATIENCE,
@@ -75,12 +85,20 @@ class ParticleTrainer:
         self.optimizer = None
 
         self.embedding = embedding
+        self.embedding_map = self.generate_embedding_map()
 
-        self.train_dl, self.valid_dl, self.test_dl = get_dataloaders()
-        self.trunc_train_dl, self.trunc_valid_dl, self.trunc_test_dl = get_dataloaders(truncation_p=0.3)
+        self.train_dl, self.valid_dl, self.test_dl = get_dataloaders(embedding_map=self.embedding_map)
+        self.trunc_train_dl, self.trunc_valid_dl, self.trunc_test_dl = get_dataloaders(
+            truncation_p=0.3, embedding_map=self.embedding_map
+        )
+
+    def generate_embedding_map(self):
+        if not self.embedding:
+            return None
+        return torch.randperm(100).view([10, 10])
 
     def init_net(self):
-        self.net = ParticleNet(**self.net_kwargs)
+        self.net = ParticleNet(embedding=self.embedding, **self.net_kwargs)
         self.net.to(DEVICE)
         self.net.train()
 
@@ -218,13 +236,22 @@ class ParticleTrainer:
 
             acc, loss = self.run_evaluation(self.test_dl, 'TEST')
 
-            snapshot_path = SNAPSHOT_PATH\
-                            + f'Snap_a{10000 * acc:.0f}_{datetime.now().strftime("%d_%m_%Y_%H_%M")}'
-            torch.save(best_state_dict, snapshot_path)
+            snapshot_path = SNAPSHOT_PATH \
+                + f'{"embed_" if self.embedding else ""}Snap_a{10000 * acc:.0f}_{datetime.now().strftime("%d_%m_%Y_%H_%M")}'
+            self.save_snapshot(snapshot_path, best_state_dict)
             #self.run_evaluation(self.train_dl, 'TRAIN')
 
             return acc, loss
 
+    def save_snapshot(self, path, state_dict):
+        obj = (self.embedding_map, state_dict) if self.embedding else state_dict
+        torch.save(obj, path)
+
     def load_snapshot(self, path: str):
         self.init_net()
-        self.net.load_state_dict(torch.load(path))
+
+        state_dict = torch.load(path)
+        if self.embedding:
+            self.embedding_map, state_dict = state_dict
+
+        self.net.load_state_dict(state_dict)
