@@ -5,6 +5,7 @@ from network import ParticleTrainer
 from utils import plot_embeddings
 
 SNAPSHOT = BEST_EMBEDDED_SNAPSHOT_PATH
+SAVE_FILE = True
 
 
 def main():
@@ -15,7 +16,10 @@ def main():
     embedding_matrix = trainer.net.embedding.weight
     embedding_matrix = embedding_matrix.cpu().detach().numpy()
 
-    plot_embeddings(embedding_map, embedding_matrix, file=FINAL_EMBEDDING_PATH + f'/{basename(SNAPSHOT)}.png')
+    plot_embeddings(
+        embedding_map, embedding_matrix,
+        file=FINAL_EMBEDDING_PATH + f'/{basename(SNAPSHOT)}.png' if SAVE_FILE else None,
+    )
 
 
 if __name__ == "__main__":

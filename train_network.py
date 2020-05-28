@@ -3,7 +3,7 @@ from network import ParticleTrainer
 from utils import plot_embeddings
 
 
-USE_EMBEDDING = False
+USE_EMBEDDING = True
 PLOT_EMBEDDING_HISTORY = False
 
 

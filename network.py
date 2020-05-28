@@ -15,15 +15,20 @@ class ParticleNet(nn.Module):
     def __init__(
             self,
             embedding=False,
+            gru=False,
             hidden_fc=DEFAULT_HIDDEN_FC,
             recurrent_layers=DEFAULT_RECURRENT_LAYERS,
             recurrent_features=DEFAULT_RECURRENT_FEATURES,
     ):
         super().__init__()
 
+        self.gru = gru
+
         self.embedding = nn.Embedding(num_embeddings=100, embedding_dim=2) if embedding else None
 
         self.recurrent = nn.LSTM(
+            2, hidden_size=recurrent_features, num_layers=recurrent_layers, batch_first=True,
+        ) if not gru else nn.GRU(
             2, hidden_size=recurrent_features, num_layers=recurrent_layers, batch_first=True,
         )
 
@@ -45,7 +50,10 @@ class ParticleNet(nn.Module):
     def forward(self, x):
         if self.embedding:
             x = self.embed_packed_sequence(x)
-        out, (h, c) = self.recurrent(x)
+        out, h = self.recurrent(x)
+        if not self.gru:
+            h, c = h
+
         x = h[-1]
         x = self.linear(x)
         return x
@@ -61,6 +69,7 @@ class ParticleTrainer:
             self,
             embedding=False,
             store_embeddings=False,
+            gru=False,
             optimizer_lambda=partial(optim.Adam, lr=DEFAULT_LR, weight_decay=DEFAULT_WEIGHT_DECAY, amsgrad=True),
             mb_size=DEFAULT_MB_SIZE,
             num_epochs=DEFAULT_NUM_EPOCHS,
@@ -90,6 +99,8 @@ class ParticleTrainer:
         self.embedding_history = []
         self.embedding_map = self.generate_embedding_map()
 
+        self.gru = gru
+
         self.train_dl, self.valid_dl, self.test_dl = get_dataloaders(embedding_map=self.embedding_map)
         self.trunc_train_dl, self.trunc_valid_dl, self.trunc_test_dl = get_dataloaders(
             truncation_p=0.3, embedding_map=self.embedding_map
@@ -105,7 +116,7 @@ class ParticleTrainer:
             self.embedding_history.append(self.net.embedding.weight.cpu().detach().numpy())
 
     def init_net(self):
-        self.net = ParticleNet(embedding=self.embedding, **self.net_kwargs)
+        self.net = ParticleNet(embedding=self.embedding, gru=self.gru, **self.net_kwargs)
         self.net.to(DEVICE)
         self.net.train()
 
@@ -250,7 +261,9 @@ class ParticleTrainer:
             acc, loss = self.run_evaluation(self.test_dl, 'TEST')
 
             snapshot_path = SNAPSHOT_PATH \
-                + f'{"embed_" if self.embedding else ""}Snap_a{10000 * acc:.0f}_{datetime.now().strftime("%d_%m_%Y_%H_%M")}'
+                + f'{"embed_" if self.embedding else ""}' \
+                + f'{"gru_" if self.gru else ""}' \
+                + f'Snap_a{10000 * acc:.0f}_{datetime.now().strftime("%d_%m_%Y_%H_%M")}'
             self.save_snapshot(snapshot_path, best_state_dict)
             #self.run_evaluation(self.train_dl, 'TRAIN')
 
