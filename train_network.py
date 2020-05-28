@@ -1,10 +1,9 @@
-from constants import *
-from input import load_file,get_dataloaders
+from network import ParticleTrainer
 
 
 def main():
-    train, valid, test = get_dataloaders(truncation_p=0.2)
-    pass
+    trainer = ParticleTrainer()
+    trainer.train()
 
 
 if __name__ == "__main__":

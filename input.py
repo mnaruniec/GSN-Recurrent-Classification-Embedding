@@ -28,7 +28,7 @@ class RNNDataLoader(PreprocessDataLoader):
         return packed, y[order].to(DEVICE)
 
 
-def load_file(path: str, is_labels: bool) -> torch.Tensor:
+def load_file(path: str, is_labels: bool, normalize=False) -> torch.Tensor:
     with open(path, mode='r') as f:
         if is_labels:
             return torch.tensor([int(line) for line in f])
@@ -39,6 +39,9 @@ def load_file(path: str, is_labels: bool) -> torch.Tensor:
             ]
             for line in f
         ])
+
+    if normalize:
+        splits = (splits.float() / 4.5) - 1.
 
     return splits
 
