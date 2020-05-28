@@ -15,7 +15,7 @@ def main():
         embedding_history = trainer.embedding_history
         embedding_map = trainer.embedding_map.numpy()
         for i, embedding in enumerate(embedding_history):
-            plot_embeddings(embedding_map, embedding, annotate=False, file=EMBEDDING_HISTORY_PATH + f'/{i}.png')
+            plot_embeddings(embedding_map, embedding, annotate=False, file=EMBEDDING_HISTORY_PATH + f'/{i:02d}.png')
 
 
 if __name__ == "__main__":
