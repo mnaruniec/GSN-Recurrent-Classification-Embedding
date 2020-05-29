@@ -4,7 +4,7 @@ from constants import *
 from input import load_file
 
 
-SAMPLES_PER_CLASS = 10
+SAMPLES_PER_CLASS = 30
 
 def get_samples(xs, ys, samples_per_class=SAMPLES_PER_CLASS):
     samples = [[] for _ in range(NUM_CLASSES)]
